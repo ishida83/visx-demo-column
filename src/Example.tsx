@@ -1,5 +1,5 @@
-import React from "react";
-import { BarStack } from "@visx/shape";
+import * as React from "react";
+import { BarStack, BarGroup } from "@visx/shape";
 import { SeriesPoint } from "@visx/shape/lib/types";
 import { Group } from "@visx/group";
 import { GridRows } from "@visx/grid";
@@ -11,6 +11,7 @@ import { scaleBand, scaleLinear, scaleOrdinal } from "@visx/scale";
 import { timeParse, timeFormat } from "d3-time-format";
 import { useTooltip, useTooltipInPortal, defaultStyles } from "@visx/tooltip";
 import { LegendOrdinal, LegendLabel, LegendItem } from "@visx/legend";
+import { localPoint } from "@visx/event";
 
 type CityName = "New York" | "San Francisco" | "Austin";
 
@@ -25,18 +26,34 @@ type TooltipData = {
   color: string;
 };
 
+// type TooltipData = {
+//   bar: SeriesPoint<Forecast>;
+//   key: Supplier;
+//   index: number;
+//   height: number;
+//   width: number;
+//   x: number;
+//   y: number;
+//   color: string;
+// };
+
 export type BarStackProps = {
   width: number;
-  height: number;
+  height?: number;
   margin?: { top: number; right: number; bottom: number; left: number };
   events?: boolean;
 };
 
+
 const green1 = "#0b2345";
-const green2 = "#135865";
-const green3 = "#3a956c";
+// const green2 = "#135865";
+// const green3 = "#3a956c";
+
+const caltex_blue = '#0072BC';
+const caltex_light_blue = '#52ADE6';
+
 export const background = "#fff";
-const legendGlyphSize = 20;
+const legendGlyphSize = 10;
 const defaultMargin = { top: 50, right: 40, bottom: 100, left: 100 };
 const tooltipStyles = {
   ...defaultStyles,
@@ -61,7 +78,7 @@ const temperatureTotals = data.reduce((allTotals, currentDate) => {
 }, [] as number[]);
 
 const parseDate = timeParse("%Y-%m-%d");
-const format = timeFormat("%Y");
+const format = timeFormat("%Y %b %d");
 const formatDate = (date: string) => format(parseDate(date) as Date);
 
 // accessors
@@ -78,14 +95,19 @@ const temperatureScale = scaleLinear<number>({
 });
 const colorScale = scaleOrdinal<CityName, string>({
   domain: keys,
-  range: [green1, green2, green3]
+  range: [green1, caltex_blue, caltex_light_blue]
+});
+
+const cityScale = scaleBand<string>({
+  domain: keys,
+  padding: 0.1,
 });
 
 let tooltipTimeout: number;
 
 export default function Example({
   width,
-  height,
+  height = 300,
   events = false,
   margin = defaultMargin
 }: BarStackProps) {
@@ -98,7 +120,9 @@ export default function Example({
     showTooltip
   } = useTooltip<TooltipData>();
 
-  const { containerRef, TooltipInPortal } = useTooltipInPortal();
+  const { containerRef, TooltipInPortal } = useTooltipInPortal({
+    scroll: true
+  });
 
   if (width < 50) return null;
   // bounds
@@ -107,11 +131,114 @@ export default function Example({
 
   dateScale.rangeRound([0, xMax]);
   temperatureScale.range([yMax, 0]);
+  cityScale.rangeRound([0, dateScale.bandwidth()]);
 
   return (
     // relative position is needed for correct tooltip positioning
     <div style={{ position: "relative" }}>
       <svg ref={containerRef} width={width} height={height}>
+        <Group top={margin.top} left={margin.left}>
+          <GridRows
+            scale={temperatureScale}
+            width={xMax}
+            height={yMax}
+            stroke="black"
+            strokeOpacity={0.1}
+            strokeDasharray="4,4"
+            strokeWidth={2}
+            numTicks={verticalTickAmount}
+          />
+          <AxisLeft
+            scale={temperatureScale}
+            hideTicks
+            numTicks={verticalTickAmount}
+            tickLabelProps={() => ({
+              fill: "#aeaeae",
+              fontWeight: 700,
+              fontSize: 18,
+              textAnchor: "middle",
+              verticalAnchor: "middle"
+            })}
+            tickLength={30} // TODO: this is an ugly hack :)
+            strokeWidth={2}
+            stroke="#dcdcdc"
+            labelOffset={40}
+            label="Pipeline"
+            labelProps={{
+              fill: "#aeaeae",
+              fontWeight: 700,
+              fontSize: 14,
+              textAnchor: "middle"
+            }}
+          />
+          <AxisBottom
+            top={yMax}
+            scale={dateScale}
+            tickFormat={formatDate}
+            hideTicks
+            tickLabelProps={() => ({
+              fill: "#aeaeae",
+              fontWeight: 700,
+              fontSize: 12,
+              textAnchor: "middle",
+            })}
+            strokeWidth={2}
+            stroke="#dcdcdc"
+          />
+          <BarGroup<CityTemperature, CityName>
+            data={data}
+            keys={keys}
+            height={yMax}
+            x0={getDate}
+            x0Scale={dateScale}
+            x1Scale={cityScale}
+            yScale={temperatureScale}
+            color={colorScale}
+          >
+            {(barGroups) =>
+              barGroups.map((barGroup) => (
+                <Group key={`bar-group-${barGroup.index}-${barGroup.x0}`} left={barGroup.x0}>
+                  {barGroup.bars.map((bar) => (
+                    <rect
+                      key={`bar-group-bar-${barGroup.index}-${bar.index}-${bar.value}-${bar.key}`}
+                      x={bar.width + bar.index * bar.width/2}
+                      y={bar.y}
+                      width={8}
+                      height={bar.height}
+                      fill={bar.color}
+                      rx={4}
+                      onClick={() => {
+                        if (events) alert(`clicked: ${JSON.stringify(barGroup)}`);
+                        // if (!events) return;
+                        // const { key, value } = bar;
+                        // alert(`clicked: ${JSON.stringify({ key, value })}`);
+                      }}
+                      onMouseLeave={() => {
+                        tooltipTimeout = window.setTimeout(() => {
+                          hideTooltip();
+                        }, 300);
+                      }}
+                      onMouseMove={(event) => {
+                        if (tooltipTimeout) clearTimeout(tooltipTimeout);
+                        // const eventSvgCoords = localPoint(event);
+                        // const left = bar.x + bar.width / 2;
+                        // const barData = barGroup.bars.find(it=> it.key===bar.key);
+                        // if(barData){
+                        //   showTooltip({
+                        //     tooltipData: barData,
+                        //     tooltipTop: eventSvgCoords?.y,
+                        //     tooltipLeft: left
+                        //   });
+                        // }
+                      }}
+                    />
+                  ))}
+                </Group>
+              ))
+            }
+          </BarGroup>
+        </Group>
+
         <Group left={margin.left} top={margin.top}>
           <GridRows
             scale={temperatureScale}
@@ -138,7 +265,7 @@ export default function Example({
             strokeWidth={2}
             stroke="#dcdcdc"
             labelOffset={40}
-            label="ENERGY (TJ)"
+            label="Pipeline"
             labelProps={{
               fill: "#aeaeae",
               fontWeight: 700,
@@ -154,7 +281,7 @@ export default function Example({
             tickLabelProps={() => ({
               fill: "#aeaeae",
               fontWeight: 700,
-              fontSize: 18,
+              fontSize: 12,
               textAnchor: "middle"
             })}
             strokeWidth={2}
@@ -171,12 +298,13 @@ export default function Example({
             {(barStacks) =>
               barStacks.map((barStack) =>
                 barStack.bars.map((bar) => (
-                  <path
-                    d={`M${bar.x + bar.width / 1.5 / 4},${
-                      bar.y + bar.height
-                    } v-${bar.height} q0,-5 5,-5 h${
-                      bar.width / 1.5
-                    } q5,0 5,5 v${bar.height}`}
+                  <rect
+                    rx={4}
+                    key={`bar-stack-${barStack.index}-${bar.index}`}
+                    x={bar.x + bar.width / 2 - 4}
+                    y={bar.y}
+                    height={bar.height}
+                    width={8}
                     fill={bar.color}
                     onClick={() => {
                       if (events) alert(`clicked: ${JSON.stringify(bar)}`);
@@ -188,15 +316,41 @@ export default function Example({
                     }}
                     onMouseMove={(event) => {
                       if (tooltipTimeout) clearTimeout(tooltipTimeout);
-                      const top = event.clientY - margin.top;
+                      const eventSvgCoords = localPoint(event);
                       const left = bar.x + bar.width / 2;
                       showTooltip({
                         tooltipData: bar,
-                        tooltipTop: top,
+                        tooltipTop: eventSvgCoords?.y,
                         tooltipLeft: left
                       });
                     }}
                   />
+                  // <path
+                  //   d={`M${bar.x + bar.width / 1.5 / 4},${
+                  //     bar.y + bar.height
+                  //   } v-${bar.height} q0,-5 5,-5 h${
+                  //     bar.width / 1.5
+                  //   } q5,0 5,5 v${bar.height}`}
+                  //   fill={bar.color}
+                  //   onClick={() => {
+                  //     if (events) alert(`clicked: ${JSON.stringify(bar)}`);
+                  //   }}
+                  //   onMouseLeave={() => {
+                  //     tooltipTimeout = window.setTimeout(() => {
+                  //       hideTooltip();
+                  //     }, 300);
+                  //   }}
+                  //   onMouseMove={(event) => {
+                  //     if (tooltipTimeout) clearTimeout(tooltipTimeout);
+                  //     const top = event.clientY - margin.top;
+                  //     const left = bar.x + bar.width / 2;
+                  //     showTooltip({
+                  //       tooltipData: bar,
+                  //       tooltipTop: top,
+                  //       tooltipLeft: left
+                  //     });
+                  //   }}
+                  // />
                 ))
               )
             }
@@ -204,6 +358,16 @@ export default function Example({
         </Group>
       </svg>
       <div
+        style={{
+          position: "absolute",
+          top: margin.top / 2 - 18,
+          width: "100%",
+          display: "flex",
+          justifyContent: "flex-end",
+          fontSize: 14
+        }}
+      >
+      {/* <div
         style={{
           position: "absolute",
           bottom: 40,
@@ -215,7 +379,7 @@ export default function Example({
           color: "#414243",
           textTransform: "uppercase"
         }}
-      >
+      > */}
         <LegendOrdinal scale={colorScale} direction="row">
           {(labels) =>
             labels.map((label, i) => (
@@ -253,7 +417,7 @@ export default function Example({
               {tooltipData.key}
             </strong>
           </div>
-          <div>{tooltipData.bar.data[tooltipData.key]} TJ</div>
+          <div>{tooltipData.bar.data[tooltipData.key]}</div>
           <div>
             <small>{formatDate(getDate(tooltipData.bar.data))}</small>
           </div>

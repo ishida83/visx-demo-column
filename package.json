@@ -5,9 +5,8 @@
   "private": true,
   "dependencies": {
     "@babel/runtime": "^7.8.4",
-    "@types/react": "^16",
-    "@types/react-dom": "^16",
     "@visx/axis": "latest",
+    "@visx/event": "^2.1.2",
     "@visx/grid": "latest",
     "@visx/group": "latest",
     "@visx/legend": "latest",
@@ -20,7 +19,7 @@
     "react": "^16",
     "react-dom": "^16",
     "react-scripts-ts": "^2.13.0",
-    "typescript": "^3"
+    "typescript": "^4"
   },
   "keywords": [],
   "scripts": {
@@ -28,5 +27,12 @@
     "build": "react-scripts-ts build",
     "test": "react-scripts-ts test --env=jsdom",
     "eject": "react-scripts-ts eject"
+  },
+  "devDependencies": {
+    "@types/d3-time-format": "^4.0.0",
+    "@types/jest": "^27.4.0",
+    "@types/node": "^17.0.10",
+    "@types/react": "^16",
+    "@types/react-dom": "^16"
   }
 }

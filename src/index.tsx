@@ -1,11 +1,13 @@
-import * as React from 'react';
-import * as ReactDOM from 'react-dom';
-import App from './App';
-import registerServiceWorker from './registerServiceWorker';
-import './index.css';
+import * as React from "react";
+import { render } from "react-dom";
+import ParentSize from "@visx/responsive/lib/components/ParentSize";
 
-ReactDOM.render(
-  <App />,
-  document.getElementById('root') as HTMLElement
+import Example from "./Example";
+import "./sandbox-styles.css";
+
+render(
+  <ParentSize>
+    {({ width, height }) => <Example width={width} height={height} events />}
+  </ParentSize>,
+  document.getElementById("root")
 );
-registerServiceWorker();
